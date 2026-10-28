@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  nodered:
+    image: nodered/node-red:latest
+    container_name: smart_factory_nodered
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered_data:/data
+      - ./node_red/flows.json:/data/flows.json
+    environment:
+      - TZ=UTC
+      - FLOWS=flows.json
+    # Pre-install dashboard node
+    entrypoint: ["sh", "-c", "npm install node-red-dashboard node-red-contrib-ui-led && ./entrypoint.sh"]
+
+volumes:
+  nodered_data:

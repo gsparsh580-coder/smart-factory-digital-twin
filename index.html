@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Factory Digital Twin | AI Predictive Maintenance & Control</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- MQTT.js CDN -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-cyan-500 selection:text-black">
+
+  <!-- ================= TOP NAVIGATION BAR ================= -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand & Asset Identity -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-cyan-600 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 border border-cyan-400/30">
+          <i class="fa-solid fa-industry text-lg text-white animate-pulse"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold font-mono tracking-tight text-white flex items-center gap-2">
+              DIGITAL TWIN <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-sans">CNC-MILL-CELL-04</span>
+            </h1>
+          </div>
+          <p class="text-xs text-slate-400">AI Predictive Maintenance & Autonomous SCADA Control Deck</p>
+        </div>
+      </div>
+
+      <!-- Live Connectivity & Mode Badges -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- MQTT Broker Status Pill -->
+        <div id="mqttStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-300">
+          <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-ping"></span>
+          <span id="mqttStatusText">HiveMQ: Connecting...</span>
+        </div>
+
+        <!-- Telemetry Data Source Badge -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800 text-xs text-cyan-300 font-mono">
+          <i class="fa-solid fa-bolt text-cyan-400"></i>
+          <span id="activeSourceText">Source: SYNTHETIC</span>
+        </div>
+
+        <!-- Machine Operating State Pill -->
+        <div id="machineStateBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950 border border-emerald-700 text-xs text-emerald-400 font-semibold font-mono">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <span id="machineStateText">STATUS: RUNNING</span>
+        </div>
+
+        <!-- Settings Button -->
+        <button id="btnOpenSettings" title="Broker Settings" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+
+        <!-- Audio Mute Toggle -->
+        <button id="btnToggleAudio" title="Toggle Alarm Sound" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-volume-high" id="audioIcon"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= EMERGENCY BANNER (Hidden unless E-STOP) ================= -->
+  <div id="estopAlertBanner" class="hidden bg-red-600 text-white px-4 py-2 text-center font-bold text-sm tracking-wide animate-pulse flex items-center justify-center gap-3 shadow-lg shadow-red-900/50 z-30">
+    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+    <span>CRITICAL SAFETY INTERLOCK: ASSET HALTED UNDER EMERGENCY STOP! INSPECTION REQUIRED.</span>
+    <button id="btnBannerReset" class="ml-4 px-3 py-1 rounded bg-white text-red-700 text-xs font-black uppercase hover:bg-slate-100 transition shadow">
+      Clear & Reset
+    </button>
+  </div>
+
+  <!-- ================= MAIN DASHBOARD CONTAINER ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- ROW 1: AI HEALTH HERO & KEY TELEMETRY GAUGES -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      
+      <!-- AI Health Index Card -->
+      <div class="col-span-2 sm:col-span-3 lg:col-span-2 p-4 rounded-xl bg-slate-900/90 border border-slate-800 relative overflow-hidden shadow-lg group hover:border-cyan-500/50 transition">
+        <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition"></div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs uppercase font-mono tracking-wider text-slate-400">AI Asset Health Index</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-mono">Isolation Forest</span>
+        </div>
+        <div class="flex items-baseline gap-3">
+          <span id="metricHealthIndex" class="text-4xl sm:text-5xl font-black font-mono text-emerald-400">96.5</span>
+          <span class="text-lg text-slate-400 font-semibold">%</span>
+        </div>
+        <!-- Progress bar -->
+        <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+          <div id="barHealthIndex" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full rounded-full transition-all duration-500" style="width: 96.5%"></div>
+        </div>
+        <div class="flex justify-between items-center mt-3 text-xs text-slate-400">
+          <span>RUL: <strong id="metricRulHours" class="text-slate-200 font-mono">1,840 hrs</strong></span>
+          <span id="metricAnomalyStatus" class="text-emerald-400 font-medium"><i class="fa-solid fa-circle-check"></i> Nominal</span>
+        </div>
+      </div>
+
+      <!-- Spindle RPM Card -->
+      <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-lg relative group hover:border-slate-700 transition">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">SPINDLE RPM</span>
+          <i class="fa-solid fa-rotate text-cyan-400"></i>
+        </div>
+        <div class="text-2xl sm:text-3xl font-black font-mono text-white" id="metricRpm">1,750</div>
+        <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+          <span>Target: <span id="metricTargetRpm" class="text-slate-200 font-mono">1,750</span></span>
+          <span id="rpmPill" class="text-xs px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono">STABLE</span>
+        </div>
+      </div>
+
+      <!-- Vibration RMS Card -->
+      <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-lg relative group hover:border-slate-700 transition">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">VIBRATION RMS</span>
+          <i class="fa-solid fa-water text-purple-400"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl sm:text-3xl font-black font-mono text-white" id="metricVibration">2.4</span>
+          <span class="text-xs text-slate-400">mm/s</span>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+          <div id="barVibration" class="bg-emerald-400 h-full rounded-full transition-all duration-300" style="width: 20%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2">
+          <span>Threshold: 7.0</span>
+          <span id="vibPeakText" class="font-mono text-slate-300">Peak: 3.6</span>
+        </div>
+      </div>
+
+      <!-- Stator Temperature Card -->
+      <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-lg relative group hover:border-slate-700 transition">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">STATOR TEMP</span>
+          <i class="fa-solid fa-temperature-half text-amber-400"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl sm:text-3xl font-black font-mono text-white" id="metricTemp">48.2</span>
+          <span class="text-xs text-slate-400">°C</span>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+          <div id="barTemp" class="bg-cyan-400 h-full rounded-full transition-all duration-300" style="width: 40%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2">
+          <span>Limit: 85°C</span>
+          <span id="tempStatePill" class="text-emerald-400 font-mono text-xs">COOL</span>
+        </div>
+      </div>
+
+      <!-- Motor Current & Power Card -->
+      <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-lg relative group hover:border-slate-700 transition">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">MOTOR LOAD</span>
+          <i class="fa-solid fa-bolt-lightning text-yellow-400"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl sm:text-3xl font-black font-mono text-white" id="metricCurrent">8.2</span>
+          <span class="text-xs text-slate-400">A</span>
+        </div>
+        <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+          <span>Power: <span id="metricPower" class="text-slate-200 font-mono">5.2</span> kW</span>
+          <span class="font-mono text-slate-300">415V 3φ</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ROW 2: LIVE 2D/3D DIGITAL TWIN CANVAS & REMOTE CONTROL DECK -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT: VISUAL DIGITAL TWIN CANVAS (7 cols) -->
+      <div class="lg:col-span-7 bg-slate-900/90 rounded-2xl border border-slate-800 p-4 shadow-xl flex flex-col justify-between relative overflow-hidden">
+        
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            <h2 class="text-sm font-bold font-mono tracking-wider text-slate-200 uppercase">
+              VIRTUAL ASSET SYNCHRONIZATION (PHYSICS TWIN)
+            </h2>
+          </div>
+          <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+            <span>FPS: <strong id="canvasFps" class="text-cyan-400">60</strong></span>
+            <span class="text-slate-600">|</span>
+            <span id="jitterIndicator" class="text-slate-400">Jitter: 0.0mm</span>
+          </div>
+        </div>
+
+        <!-- The Canvas Visualizer -->
+        <div class="relative w-full aspect-[16/9] bg-gradient-to-b from-slate-950 to-slate-900 rounded-xl border border-slate-800/80 overflow-hidden flex items-center justify-center shadow-inner">
+          <canvas id="digitalTwinCanvas" class="w-full h-full block"></canvas>
+          
+          <!-- Overlay Machine Badges -->
+          <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-black/60 border border-slate-700 text-slate-300 backdrop-blur">
+              <i class="fa-solid fa-microchip text-cyan-400 mr-1"></i> SPINDLE MOTOR DRIVE
+            </span>
+            <span id="canvasOverlayFault" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-600/50 text-emerald-400 backdrop-blur">
+              HEALTHY • NORMAL BEARING
+            </span>
+          </div>
+
+          <div class="absolute bottom-3 right-3 text-[11px] font-mono px-2.5 py-1 rounded bg-black/70 border border-slate-800 text-slate-400 backdrop-blur pointer-events-none">
+            Parts Passing: <span id="canvasPartsCounter" class="text-cyan-300 font-bold">1420</span>
+          </div>
+        </div>
+
+        <!-- AI Real-Time Diagnosis Banner -->
+        <div class="mt-3 p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2.5">
+            <div id="aiDiagnosisIcon" class="w-6 h-6 rounded bg-emerald-950 text-emerald-400 border border-emerald-700 flex items-center justify-center">
+              <i class="fa-solid fa-brain text-xs"></i>
+            </div>
+            <div>
+              <span class="font-semibold text-slate-300" id="aiDiagnosisTitle">AI Diagnosis: Normal Operation</span>
+              <p class="text-[11px] text-slate-400" id="aiDiagnosisRecommendation">Asset running optimally. No immediate service required.</p>
+            </div>
+          </div>
+          <div class="text-right font-mono text-[11px]">
+            <span class="text-slate-500">Confidence:</span>
+            <span id="aiDiagnosisConfidence" class="text-cyan-400 font-bold ml-1">98.4%</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: BIDIRECTIONAL CONTROL DECK (5 cols) -->
+      <div class="lg:col-span-5 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-xl flex flex-col justify-between space-y-4">
+        
+        <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-gamepad text-cyan-400"></i>
+            <h2 class="text-sm font-bold font-mono tracking-wider text-slate-200 uppercase">
+              OPERATOR COMMAND CENTER
+            </h2>
+          </div>
+          <span class="text-xs text-slate-500 font-mono">MQTT Bi-Directional</span>
+        </div>
+
+        <!-- 1. Emergency Stop & System Start Buttons -->
+        <div class="grid grid-cols-2 gap-3">
+          <button id="btnEstop" class="col-span-2 py-4 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black font-mono text-sm sm:text-base tracking-wider uppercase border border-red-500 shadow-xl shadow-red-950/60 transition active:scale-95 flex items-center justify-center gap-3">
+            <i class="fa-solid fa-hand text-xl"></i>
+            <span>EMERGENCY STOP (E-STOP)</span>
+          </button>
+          
+          <button id="btnResume" class="py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-mono text-xs tracking-wider uppercase border border-emerald-500 transition active:scale-95 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-play"></i>
+            <span>START / RESUME</span>
+          </button>
+
+          <button id="btnResetAlarms" class="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold font-mono text-xs tracking-wider uppercase border border-slate-700 transition active:scale-95 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+            <span>RESET ALARMS</span>
+          </button>
+        </div>
+
+        <!-- 2. Target Speed Control (Slider & Presets) -->
+        <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="text-slate-400">TARGET SPINDLE SPEED</span>
+            <span class="text-cyan-400 font-bold"><span id="speedSliderValue">1750</span> RPM</span>
+          </div>
+          <input type="range" id="speedSlider" min="0" max="3000" step="50" value="1750" class="w-full accent-cyan-500 cursor-pointer">
+          <div class="flex justify-between gap-1 text-[11px] font-mono text-slate-400 pt-1">
+            <button class="preset-speed px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-rpm="0">0 (OFF)</button>
+            <button class="preset-speed px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-rpm="1000">1000</button>
+            <button class="preset-speed px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-rpm="1750">1750 (STD)</button>
+            <button class="preset-speed px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-rpm="2500">2500 (MAX)</button>
+          </div>
+        </div>
+
+        <!-- 3. Machine Operating Mode & Telemetry Source -->
+        <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+          <div>
+            <label class="block text-slate-400 mb-1">OPERATING MODE</label>
+            <select id="selectMode" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+              <option value="AUTO" selected>AUTO (PLC Controlled)</option>
+              <option value="MANUAL">MANUAL (Operator Override)</option>
+              <option value="MAINTENANCE">MAINTENANCE (Diagnostics)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">TELEMETRY SOURCE</label>
+            <select id="selectDataSource" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+              <option value="synthetic" selected>Synthetic Simulator</option>
+              <option value="esp32">ESP32 Hardware</option>
+              <option value="inbrowser">In-Browser Demo Engine</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 4. AI Anomaly Injection Test Matrix -->
+        <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="text-slate-400"><i class="fa-solid fa-flask-vial text-purple-400 mr-1"></i> FAULT INJECTION (TWIN STRESS TEST)</span>
+            <span class="text-[10px] text-purple-400 uppercase">Simulate Chaos</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <button id="btnInjectBearing" class="py-2 px-2.5 rounded bg-slate-800 hover:bg-purple-950/50 hover:border-purple-600 border border-slate-700 text-slate-300 transition text-left flex items-center justify-between">
+              <span>Bearing Fault</span>
+              <i class="fa-solid fa-gears text-purple-400"></i>
+            </button>
+            <button id="btnInjectThermal" class="py-2 px-2.5 rounded bg-slate-800 hover:bg-amber-950/50 hover:border-amber-600 border border-slate-700 text-slate-300 transition text-left flex items-center justify-between">
+              <span>Thermal Runaway</span>
+              <i class="fa-solid fa-fire text-amber-400"></i>
+            </button>
+            <button id="btnInjectStall" class="py-2 px-2.5 rounded bg-slate-800 hover:bg-red-950/50 hover:border-red-600 border border-slate-700 text-slate-300 transition text-left flex items-center justify-between">
+              <span>Motor Stall</span>
+              <i class="fa-solid fa-plug-circle-bolt text-red-400"></i>
+            </button>
+            <button id="btnClearFaults" class="py-2 px-2.5 rounded bg-emerald-950 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 transition text-left flex items-center justify-between">
+              <span>Clear All Faults</span>
+              <i class="fa-solid fa-check text-emerald-400"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ROW 3: PRODUCTION OEE METRICS & REAL-TIME CHARTS -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT: OEE Breakdown & Production Counters (4 cols) -->
+      <div class="lg:col-span-4 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+            <h3 class="text-sm font-bold font-mono tracking-wider text-slate-200 uppercase">
+              OEE EFFICIENCY & OUTPUT
+            </h3>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono" id="oeeOverall">89.4% OEE</span>
+        </div>
+
+        <!-- 3 OEE Pillars -->
+        <div class="space-y-3 text-xs font-mono">
+          <!-- Availability -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Availability (Uptime)</span>
+              <span id="oeeAvailability" class="text-cyan-400 font-bold">96.2%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="barOeeAvailability" class="bg-cyan-500 h-full rounded-full transition-all duration-500" style="width: 96.2%"></div>
+            </div>
+          </div>
+
+          <!-- Performance -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Performance (Speed)</span>
+              <span id="oeePerformance" class="text-emerald-400 font-bold">94.5%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="barOeePerformance" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 94.5%"></div>
+            </div>
+          </div>
+
+          <!-- Quality -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Quality (Zero Defect)</span>
+              <span id="oeeQuality" class="text-amber-400 font-bold">98.2%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="barOeeQuality" class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: 98.2%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Production Part Counters -->
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center font-mono">
+          <div class="p-2 rounded bg-slate-950 border border-slate-800">
+            <span class="text-[10px] text-slate-500 block">TOTAL</span>
+            <span id="countTotalParts" class="text-base font-bold text-white">1,420</span>
+          </div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800">
+            <span class="text-[10px] text-emerald-500 block">GOOD</span>
+            <span id="countGoodParts" class="text-base font-bold text-emerald-400">1,402</span>
+          </div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800">
+            <span class="text-[10px] text-red-500 block">DEFECTS</span>
+            <span id="countDefects" class="text-base font-bold text-red-400">18</span>
+          </div>
+        </div>
+
+        <!-- Secondary Physics Sensors -->
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs font-mono">
+          <div class="flex justify-between items-center text-slate-400">
+            <span><i class="fa-solid fa-oil-can text-blue-400 mr-1.5"></i> Lube Pressure:</span>
+            <span id="metricLubePsi" class="text-slate-200 font-bold">54.0 PSI</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-400">
+            <span><i class="fa-solid fa-volume-high text-yellow-400 mr-1.5"></i> Acoustic Noise:</span>
+            <span id="metricAcousticDb" class="text-slate-200 font-bold">72.4 dB</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-400">
+            <span><i class="fa-solid fa-stopwatch text-slate-400 mr-1.5"></i> Cycle Time:</span>
+            <span id="metricCycleTime" class="text-slate-200 font-bold">4.20 s</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: DUAL TIME-SERIES CHARTS (8 cols) -->
+      <div class="lg:col-span-8 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-xl space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-chart-line text-cyan-400"></i>
+            <h3 class="text-sm font-bold font-mono tracking-wider text-slate-200 uppercase">
+              HIGH-FREQUENCY TELEMETRY TRENDS
+            </h3>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <span class="flex items-center gap-1.5 text-purple-400">
+              <span class="w-2.5 h-0.5 bg-purple-400 inline-block"></span> Vibration (mm/s)
+            </span>
+            <span class="flex items-center gap-1.5 text-amber-400">
+              <span class="w-2.5 h-0.5 bg-amber-400 inline-block"></span> Temperature (°C)
+            </span>
+          </div>
+        </div>
+
+        <!-- Telemetry Chart -->
+        <div class="w-full h-64 sm:h-72">
+          <canvas id="telemetryTrendChart"></canvas>
+        </div>
+
+        <!-- Live Event & Safety Log -->
+        <div class="pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-2 font-mono">
+            <span><i class="fa-solid fa-list-check mr-1 text-cyan-400"></i> AUDIT & SAFETY EVENT STREAM</span>
+            <button id="btnClearLog" class="text-[11px] text-slate-500 hover:text-slate-300">Clear</button>
+          </div>
+          <div id="eventLogContainer" class="h-20 overflow-y-auto space-y-1 text-[11px] font-mono text-slate-400 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-500">[SYSTEM] Digital Twin dashboard initialized. Listening on HiveMQ WebSocket...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= BROKER SETTINGS MODAL ================= -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold font-mono text-white flex items-center gap-2">
+          <i class="fa-solid fa-network-wired text-cyan-400"></i> HiveMQ MQTT Configuration
+        </h3>
+        <button id="btnCloseSettings" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs font-mono">
+        <div>
+          <label class="block text-slate-400 mb-1">WebSocket Host (WSS / WS)</label>
+          <input type="text" id="inputMqttHost" value="broker.hivemq.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Port (8884 WSS / 8000 WS)</label>
+            <input type="number" id="inputMqttPort" value="8884" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Path</label>
+            <input type="text" id="inputMqttPath" value="/mqtt" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Telemetry Topic</label>
+          <input type="text" id="inputTelemetryTopic" value="factory/telemetry/machine1" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Control Topic Prefix</label>
+          <input type="text" id="inputControlPrefix" value="factory/control/" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        <button id="btnResetSettings" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-mono">
+          Defaults
+        </button>
+        <button id="btnSaveSettings" class="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 text-xs font-mono font-bold shadow-lg shadow-cyan-900/40">
+          Save & Reconnect
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-4 px-4 text-xs font-mono text-slate-500 text-center">
+    <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+      <span>AI-Driven Digital Twin Architecture • ESP32 IoT Sensors & Node-RED Flow Orchestrator</span>
+      <span class="text-cyan-500">HiveMQ Public Broker Backbone</span>
+    </div>
+  </footer>
+
+  <!-- Custom Application Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>
